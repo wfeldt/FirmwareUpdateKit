@@ -485,6 +485,8 @@ else {
   $hdimage->write("$fuk_dir/fwupdate.img");
 }
 
+$memdisk_option = "harddisk c=$hdimage->{c} h=$hdimage->{h} s=$hdimage->{s}";
+
 if(!-f "/usr/share/syslinux/memdisk") {
   die "/usr/share/syslinux/memdisk: no such file\nPlease install package 'syslinux'.\n";
 }
@@ -499,7 +501,22 @@ if($opt_iso) {
 
   mkdir "$fuk_dir/cd", 0755;
   link "$fuk_dir/fwupdate.img", "$fuk_dir/cd/fwupdate.img";
-  system "cp /usr/share/FirmwareUpdateKit/isolinux.cfg $fuk_dir/cd";
+  $_ = <<"  isolinux";
+default fwupdate
+
+label fwupdate
+  kernel memdisk
+  append initrd=fwupdate.img $memdisk_option
+
+implicit	1
+prompt		0
+timeout		0
+  isolinux
+
+  open F, ">$fuk_dir/cd/isolinux.cfg";
+  print F;
+  close F;
+
   system "cp /usr/share/syslinux/memdisk $fuk_dir/cd";
   system "cp /usr/share/syslinux/isolinux.bin $fuk_dir/cd";
   system "genisoimage" . ($opt_verbose ? "" : " --quiet") .
@@ -521,7 +538,7 @@ if($opt_grub) {
   }
   else {
     $cfg .= "\n" if substr($cfg, -2) ne "\n\n";
-    $cfg .= "title $opt_title\n    kernel /boot/memdisk harddisk\n    initrd /boot/fwupdate.img\n\n";
+    $cfg .= "title $opt_title\n    kernel /boot/memdisk $memdisk_option\n    initrd /boot/fwupdate.img\n\n";
     die "$opt_grub: $!\n" unless rename $opt_grub, "$opt_grub.fwupdate_backup";
 
     die "$opt_grub: $!\n" unless open F, ">$opt_grub";
@@ -548,7 +565,7 @@ if($opt_lilo) {
   }
   else {
     $cfg .= "\n" if substr($cfg, -2) ne "\n\n";
-    $cfg .= "image = /boot/memdisk\nlabel = \"$title\"\nappend = \"harddisk\"\ninitrd = /boot/fwupdate.img\n\n";
+    $cfg .= "image = /boot/memdisk\nlabel = \"$title\"\nappend = \"$memdisk_option\"\ninitrd = /boot/fwupdate.img\n\n";
     die "$opt_lilo: $!\n" unless rename $opt_lilo, "$opt_lilo.fwupdate_backup";
 
     die "$opt_lilo: $!\n" unless open F, ">$opt_lilo";
