@@ -415,6 +415,9 @@ usage 0 if !@ARGV;
 
 $opt_title = "Firmware Update";
 
+# leave some free space
+$opt_free = "100k";
+
 GetOptions(
   'help'     => sub { usage 0 },
   'verbose+' => \$opt_verbose,
@@ -425,6 +428,7 @@ GetOptions(
   'grub'     => \$opt_grub,
   'title=s'  => \$opt_title,
   'run=s'    => \$opt_run,
+  'free=s'   => \$opt_free,
 ) || usage 1;
 
 usage 1 if !@ARGV;
@@ -445,20 +449,21 @@ close F;
 $hdimage = HDImage::new;
 $hdimage->verbose($opt_verbose);
 
+$hdimage->size($opt_free);
+
 if($opt_floppy) {
   $hdimage->chs(80, 2, 18);
   $hdimage->partition_ofs(0);
 }
 else {
   $hdimage->chs(0, 4, 16);
-  $hdimage->size(200);		# leave some free space (in sectors)
   $hdimage->fit_size(1);
 }
 
 $hdimage->type(1);
 $hdimage->label('FWUPDATE');
 $hdimage->fs('fat');
-$hdimage->mbr('/usr/lib/boot/master-boot-code');
+$hdimage->mbr('/usr/share/syslinux/mbr.bin');
 $hdimage->boot_fat12('/usr/share/FirmwareUpdateKit/freedos_boot.fat12');
 $hdimage->boot_fat16('/usr/share/FirmwareUpdateKit/freedos_boot.fat16');
 $hdimage->add_files(('/usr/share/FirmwareUpdateKit/kernel.sys'));
@@ -516,7 +521,7 @@ if($opt_grub) {
   }
   else {
     $cfg .= "\n" if substr($cfg, -2) ne "\n\n";
-    $cfg .= "title $opt_title\n    kernel /boot/memdisk\n    initrd /boot/fwupdate.img\n\n";
+    $cfg .= "title $opt_title\n    kernel /boot/memdisk harddisk\n    initrd /boot/fwupdate.img\n\n";
     die "$opt_grub: $!\n" unless rename $opt_grub, "$opt_grub.fwupdate_backup";
 
     die "$opt_grub: $!\n" unless open F, ">$opt_grub";
@@ -543,7 +548,7 @@ if($opt_lilo) {
   }
   else {
     $cfg .= "\n" if substr($cfg, -2) ne "\n\n";
-    $cfg .= "image = /boot/memdisk\nlabel = \"$title\"\ninitrd = /boot/fwupdate.img\n\n";
+    $cfg .= "image = /boot/memdisk\nlabel = \"$title\"\nappend = \"harddisk\"\ninitrd = /boot/fwupdate.img\n\n";
     die "$opt_lilo: $!\n" unless rename $opt_lilo, "$opt_lilo.fwupdate_backup";
 
     die "$opt_lilo: $!\n" unless open F, ">$opt_lilo";
@@ -563,7 +568,7 @@ sub usage
 {
   print <<"  usage";
 Usage: fuk [OPTIONS] FILES
-FirmwareUpdateKit version 1.1.
+FirmwareUpdateKit version <VERSION>.
 
 Create bootable DOS system and add FILES to it.
 The main purpose is to assist with DOS-based firmware updates.
@@ -576,7 +581,10 @@ Options:
   --floppy FILE                 Create bootable (1440 kB) floppy disk.
   --image FILE                  Create bootable harddisk.
   --run COMMAND                 Run COMMAND after booting DOS.
+  --free SIZE                   Add SIZE free space to disk image.
   --verbose                     Be more verbose.
+
+SIZE may include a unit (b, k, M, G, T, P, E). Default is b (512 bytes).
 
   usage
 
