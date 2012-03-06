@@ -441,6 +441,8 @@ $opt_lilo = "/etc/lilo.conf" if $opt_lilo;
 $fuk_dir = tmp_dir;
 
 open F, ">$fuk_dir/config.sys";
+print F "switches=/f\n";
+print F "device=c:\himemx.exe\n";
 close F;
 open F, ">$fuk_dir/autoexec.bat";
 print F "$opt_run\n" if $opt_run;
@@ -467,6 +469,7 @@ $hdimage->mbr('/usr/share/syslinux/mbr.bin');
 $hdimage->boot_fat12('/usr/share/FirmwareUpdateKit/freedos_boot.fat12');
 $hdimage->boot_fat16('/usr/share/FirmwareUpdateKit/freedos_boot.fat16');
 $hdimage->add_files(('/usr/share/FirmwareUpdateKit/kernel.sys'));
+$hdimage->add_files(('/usr/share/FirmwareUpdateKit/himemx.exe'));
 $hdimage->add_files(('/usr/share/FirmwareUpdateKit/command.com'));
 $hdimage->add_files(("$fuk_dir/config.sys", "$fuk_dir/autoexec.bat"));
 $hdimage->add_files(@files);
