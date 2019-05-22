@@ -415,6 +415,7 @@
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 use integer;
+use strict;
 
 use Getopt::Long;
 
@@ -423,10 +424,16 @@ sub tmp_dir;
 
 usage 0 if !@ARGV;
 
-$opt_title = "Firmware Update";
-
+my $opt_verbose;
+my $opt_iso;
+my $opt_floppy;
+my $opt_image;
+my $opt_lilo;
+my $opt_grub;
+my $opt_title = "Firmware Update";
+my $opt_run;
 # leave some free space
-$opt_free = "100k";
+my $opt_free = "100k";
 
 GetOptions(
   'help'     => sub { usage 0 },
@@ -444,12 +451,13 @@ GetOptions(
 
 usage 1 if !@ARGV;
 
+my @files;
 @files = @ARGV;
 
 $opt_grub = "/boot/grub/menu.lst" if $opt_grub;
 $opt_lilo = "/etc/lilo.conf" if $opt_lilo;
 
-$fuk_dir = tmp_dir;
+my $fuk_dir = tmp_dir;
 
 open F, ">$fuk_dir/config.sys";
 print F "switches=/f\n";
@@ -459,7 +467,7 @@ open F, ">$fuk_dir/autoexec.bat";
 print F "$opt_run\n" if $opt_run;
 close F;
 
-$hdimage = HDImage::new;
+my $hdimage = HDImage::new;
 $hdimage->verbose($opt_verbose);
 
 $hdimage->size($opt_free);
@@ -499,7 +507,7 @@ else {
   $hdimage->write("$fuk_dir/fwupdate.img");
 }
 
-$memdisk_option = "harddisk c=$hdimage->{c} h=$hdimage->{h} s=$hdimage->{s}";
+my $memdisk_option = "harddisk c=$hdimage->{c} h=$hdimage->{h} s=$hdimage->{s}";
 
 if(!-f "/usr/share/syslinux/memdisk") {
   die "/usr/share/syslinux/memdisk: no such file\nPlease install package 'syslinux'.\n";
@@ -510,7 +518,7 @@ if($opt_iso) {
     die "/usr/share/syslinux/isolinux.bin: no such file\nPlease install package 'syslinux'.\n";
   }
 
-  $mkisofs = "/usr/bin/mkisofs";
+  my $mkisofs = "/usr/bin/mkisofs";
   $mkisofs = "/usr/bin/genisoimage" if ! -x $mkisofs;
 
   if(!-x $mkisofs) {
@@ -547,6 +555,7 @@ if($opt_grub) {
   exit 1 if system "cp $fuk_dir/fwupdate.img /boot";
   exit 1 if system "cp /usr/share/syslinux/memdisk /boot";
 
+  my $cfg;
   die "$opt_grub: $!\n" unless open F, $opt_grub;
   sysread F, $cfg, -s($opt_grub);
   close F;
@@ -571,11 +580,12 @@ if($opt_lilo) {
   exit 1 if system "cp $fuk_dir/fwupdate.img /boot";
   exit 1 if system "cp /usr/share/syslinux/memdisk /boot";
 
+  my $cfg;
   die "$opt_lilo: $!\n" unless open F, $opt_lilo;
   sysread F, $cfg, -s($opt_lilo);
   close F;
 
-  $title = substr($opt_title, 0, 15);
+  my $title = substr($opt_title, 0, 15);
   $title =~ s/(\s|")+/_/g;
 
   if($cfg =~ /^\s*label\s*=\s*"?$title"?\s*$/m) {
