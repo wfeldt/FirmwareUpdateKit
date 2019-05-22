@@ -431,6 +431,7 @@ $opt_free = "100k";
 GetOptions(
   'help'     => sub { usage 0 },
   'verbose+' => \$opt_verbose,
+  'version'  => sub { print "<VERSION>\n"; exit 0 },
   'iso=s'    => \$opt_iso,
   'floppy=s' => \$opt_floppy,
   'image=s'  => \$opt_image,
@@ -616,6 +617,7 @@ Options:
   --image FILE                  Create bootable harddisk.
   --run COMMAND                 Run COMMAND after booting DOS.
   --free SIZE                   Add SIZE free space to disk image.
+  --version                     Show program version.
   --verbose                     Be more verbose.
 
 SIZE may include a unit (b, k, M, G, T, P, E). Default is b (512 bytes).
