@@ -421,6 +421,10 @@ use Getopt::Long;
 
 sub usage;
 sub tmp_dir;
+sub do_iso;
+sub do_lilo;
+sub do_grub1;
+sub do_grub2;
 
 usage 0 if !@ARGV;
 
@@ -429,7 +433,8 @@ my $opt_iso;
 my $opt_floppy;
 my $opt_image;
 my $opt_lilo;
-my $opt_grub;
+my $opt_grub1;
+my $opt_grub2;
 my $opt_title = "Firmware Update";
 my $opt_run;
 # leave some free space
@@ -443,7 +448,8 @@ GetOptions(
   'floppy=s' => \$opt_floppy,
   'image=s'  => \$opt_image,
   'lilo'     => \$opt_lilo,
-  'grub'     => \$opt_grub,
+  'grub1'    => \$opt_grub1,
+  'grub2'    => \$opt_grub2,
   'title=s'  => \$opt_title,
   'run=s'    => \$opt_run,
   'free=s'   => \$opt_free,
@@ -453,9 +459,6 @@ usage 1 if !@ARGV;
 
 my @files;
 @files = @ARGV;
-
-$opt_grub = "/boot/grub/menu.lst" if $opt_grub;
-$opt_lilo = "/etc/lilo.conf" if $opt_lilo;
 
 my $fuk_dir = tmp_dir;
 
@@ -513,100 +516,17 @@ if(!-f "/usr/share/syslinux/memdisk") {
   die "/usr/share/syslinux/memdisk: no such file\nPlease install package 'syslinux'.\n";
 }
 
-if($opt_iso) {
-  if(!-f "/usr/share/syslinux/isolinux.bin") {
-    die "/usr/share/syslinux/isolinux.bin: no such file\nPlease install package 'syslinux'.\n";
-  }
+my $done = 0;
+$done = do_iso $fuk_dir if $opt_iso;
+$done = do_lilo $fuk_dir if $opt_lilo;
+$done = do_grub1 $fuk_dir if $opt_grub1;
+$done = do_grub2 $fuk_dir if $opt_grub2;
 
-  my $mkisofs = "/usr/bin/mkisofs";
-  $mkisofs = "/usr/bin/genisoimage" if ! -x $mkisofs;
-
-  if(!-x $mkisofs) {
-    die "mkisofs: command not found\nPlease install package 'mkisofs'.\n";
-  }
-
-  mkdir "$fuk_dir/cd", 0755;
-  link "$fuk_dir/fwupdate.img", "$fuk_dir/cd/fwupdate.img";
-  $_ = <<"  isolinux";
-default fwupdate
-
-label fwupdate
-  kernel memdisk
-  append initrd=fwupdate.img $memdisk_option
-
-implicit	1
-prompt		0
-timeout		0
-  isolinux
-
-  open F, ">$fuk_dir/cd/isolinux.cfg";
-  print F;
-  close F;
-
-  system "cp /usr/share/syslinux/memdisk $fuk_dir/cd";
-  system "cp /usr/share/syslinux/isolinux.bin $fuk_dir/cd";
-  system $mkisofs . ($opt_verbose ? "" : " --quiet") .
-    " -o $opt_iso -f -no-emul-boot -boot-load-size 4 -boot-info-table -b isolinux.bin -hide boot.catalog $fuk_dir/cd";
-
-  exit 0;
+if(!$done) {
+  print
+    "Warning: nothing done.\n" .
+    "Please use one of these options: --grub1, --grub2, --lilo, --iso, --floppy or --image.\n";
 }
-
-if($opt_grub) {
-  exit 1 if system "cp $fuk_dir/fwupdate.img /boot";
-  exit 1 if system "cp /usr/share/syslinux/memdisk /boot";
-
-  my $cfg;
-  die "$opt_grub: $!\n" unless open F, $opt_grub;
-  sysread F, $cfg, -s($opt_grub);
-  close F;
-
-  if($cfg =~ /^\s*title\s+$opt_title\s*$/m) {
-    print "$opt_title: entry already exists\n";
-  }
-  else {
-    $cfg .= "\n" if substr($cfg, -2) ne "\n\n";
-    $cfg .= "title $opt_title\n    kernel /boot/memdisk $memdisk_option\n    initrd /boot/fwupdate.img\n\n";
-    die "$opt_grub: $!\n" unless rename $opt_grub, "$opt_grub.fwupdate_backup";
-
-    die "$opt_grub: $!\n" unless open F, ">$opt_grub";
-    print F $cfg;
-    close F;
-  }
-
-  exit 0;
-}
-
-if($opt_lilo) {
-  exit 1 if system "cp $fuk_dir/fwupdate.img /boot";
-  exit 1 if system "cp /usr/share/syslinux/memdisk /boot";
-
-  my $cfg;
-  die "$opt_lilo: $!\n" unless open F, $opt_lilo;
-  sysread F, $cfg, -s($opt_lilo);
-  close F;
-
-  my $title = substr($opt_title, 0, 15);
-  $title =~ s/(\s|")+/_/g;
-
-  if($cfg =~ /^\s*label\s*=\s*"?$title"?\s*$/m) {
-    print "$opt_title: entry already exists\n";
-  }
-  else {
-    $cfg .= "\n" if substr($cfg, -2) ne "\n\n";
-    $cfg .= "image = /boot/memdisk\nlabel = \"$title\"\nappend = \"$memdisk_option\"\ninitrd = /boot/fwupdate.img\n\n";
-    die "$opt_lilo: $!\n" unless rename $opt_lilo, "$opt_lilo.fwupdate_backup";
-
-    die "$opt_lilo: $!\n" unless open F, ">$opt_lilo";
-    print F $cfg;
-    close F;
-  }
-
-  print "You may need to run 'lilo' now.\n";
-
-  exit 0;
-}
-
-print "Warning: nothing done.\nPlease use one of these options: --grub, --lilo, --iso, --floppy or --image.\n";
 
 
 sub usage
@@ -619,7 +539,8 @@ Create bootable DOS system and add FILES to it.
 The main purpose is to assist with DOS-based firmware updates.
 
 Options:
-  --grub                        Add boot entry to /boot/grub/menu.lst.
+  --grub1                       Add boot entry to /boot/grub/menu.lst.
+  --grub2                       Add boot entry to XXX.
   --lilo                        Add boot entry to /etc/lilo.conf.
   --title TITLE                 Use TITLE as label for boot menu entry.
   --iso FILE                    Create bootable CD.
@@ -656,3 +577,178 @@ sub tmp_dir
   return $t;
 }
 
+
+sub do_iso
+{
+  my $fuk_dir = $_[0];
+
+  if(!-f "/usr/share/syslinux/isolinux.bin") {
+    die "/usr/share/syslinux/isolinux.bin: no such file\nPlease install package 'syslinux'.\n";
+  }
+
+  my $mkisofs = "/usr/bin/mkisofs";
+  $mkisofs = "/usr/bin/genisoimage" if ! -x $mkisofs;
+
+  if(!-x $mkisofs) {
+    die "mkisofs: command not found\nPlease install package 'mkisofs'.\n";
+  }
+
+  mkdir "$fuk_dir/cd", 0755;
+  link "$fuk_dir/fwupdate.img", "$fuk_dir/cd/fwupdate.img";
+  $_ = <<"  isolinux";
+default fwupdate
+
+label fwupdate
+  kernel memdisk
+  append initrd=fwupdate.img $memdisk_option
+
+implicit	1
+prompt		0
+timeout		0
+  isolinux
+
+  open F, ">$fuk_dir/cd/isolinux.cfg";
+  print F;
+  close F;
+
+  system "cp /usr/share/syslinux/memdisk $fuk_dir/cd";
+  system "cp /usr/share/syslinux/isolinux.bin $fuk_dir/cd";
+  system $mkisofs . ($opt_verbose ? "" : " --quiet") .
+    " -o $opt_iso -f -no-emul-boot -boot-load-size 4 -boot-info-table -b isolinux.bin -hide boot.catalog $fuk_dir/cd";
+
+  return 1;
+}
+
+
+sub do_lilo
+{
+  my $fuk_dir = $_[0];
+  my $lilo_cfg = "/etc/lilo.conf";
+
+  my $config;
+  if(open my $f, $lilo_cfg) {
+    local $/;
+    $config = <$f>;
+    close $f;
+  }
+  else {
+    die "$lilo_cfg: $!\n";
+  }
+
+  exit 1 if system "cp $fuk_dir/fwupdate.img /boot";
+  exit 1 if system "cp /usr/share/syslinux/memdisk /boot";
+
+  my $title = substr($opt_title, 0, 15);
+  $title =~ s/(\s|")+/_/g;
+
+  if($config =~ /^\s*label\s*=\s*"?$title"?\s*$/m) {
+    print "$opt_title: entry already exists\n";
+  }
+  else {
+    $config .= "\n" if substr($config, -2) ne "\n\n";
+    $config .= "image = /boot/memdisk\nlabel = \"$title\"\nappend = \"$memdisk_option\"\ninitrd = /boot/fwupdate.img\n\n";
+    die "$lilo_cfg: $!\n" unless rename $lilo_cfg, "$lilo_cfg.fuk_backup";
+
+    if(open my $f, ">$lilo_cfg") {
+      print $f $config;
+      close $f;
+    }
+    else {
+      die "$lilo_cfg: $!\n";
+    }
+  }
+
+  print "You may need to run 'lilo' now.\n";
+
+  return 1;
+}
+
+
+sub do_grub1
+{
+  my $fuk_dir = $_[0];
+  my $grub1_cfg = "/boot/grub/menu.lst";
+
+  my $config;
+  if(open my $f, $grub1_cfg) {
+    local $/;
+    $config = <$f>;
+    close $f;
+  }
+  else {
+    die "$grub1_cfg: $!\n";
+  }
+
+  exit 1 if system "cp $fuk_dir/fwupdate.img /boot";
+  exit 1 if system "cp /usr/share/syslinux/memdisk /boot";
+
+  if($config =~ /^\s*title\s+$opt_title\s*$/m) {
+    print "$opt_title: entry already exists\n";
+  }
+  else {
+    $config .= "\n" if substr($config, -2) ne "\n\n";
+    $config .= "title $opt_title\n    kernel /boot/memdisk $memdisk_option\n    initrd /boot/fwupdate.img\n\n";
+    die "$grub1_cfg: $!\n" unless rename $grub1_cfg, "$grub1_cfg.fuk_backup";
+
+    if(open my $f, ">$grub1_cfg") {
+      print $f $config;
+      close $f;
+    }
+    else {
+      die "$grub1_cfg: $!\n";
+    }
+  }
+
+  return 1;
+}
+
+
+sub do_grub2
+{
+  my $fuk_dir = $_[0];
+  my $grub2_cfg = "/etc/grub.d/42_firmware_update";
+
+  exit 1 if system "cp $fuk_dir/fwupdate.img /boot";
+  exit 1 if system "cp /usr/share/syslinux/memdisk /boot";
+
+  if(-r $grub2_cfg) {
+    print "$grub2_cfg: config file already exists\n";
+
+    return 1;
+  }
+  else {
+    (my $config = <<'    = = = = = = = =') =~ s/^ {6}//mg;
+      #! /bin/sh
+
+      prefix="/usr"
+      exec_prefix="/usr"
+      datarootdir="/usr/share"
+
+      . "$pkgdatadir/grub-mkconfig_lib"
+
+      boot_dev=$(prepare_grub_to_access_device ${GRUB_DEVICE_BOOT} | grub_add_tab)
+
+      cat <<EOF
+      menuentry 'Firmware Update' {
+      $boot_dev
+      	linux16 /boot/memdisk harddisk c=8 h=4 s=16
+      	initrd16 /boot/fwupdate.img
+      }
+      EOF
+    = = = = = = = =
+    if(open my $f, ">$grub2_cfg") {
+      print $f $config;
+      close $f;
+      chmod 0755, $grub2_cfg;
+    }
+    else {
+      die "$grub2_cfg: $!\n";
+    }
+  }
+
+  print
+    "$grub2_cfg created.\n" .
+    "Run 'pbl --config' to update your grub2 config.\n";
+
+  return 1;
+}
