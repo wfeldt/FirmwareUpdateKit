@@ -1,7 +1,7 @@
 #! /usr/bin/perl
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# FirmwareUpdateKit version 1.1
+# FirmwareUpdateKit version <VERSION>
 #
 # Create bootable DOS system to assist with DOS-based firmware updates.
 #
@@ -25,7 +25,8 @@
 {
   package HDImage;
 
-  use strict 'vars';
+  use strict;
+  use integer;
   use bigint;
 
   sub new
@@ -33,6 +34,9 @@
     my $self = {};
 
     bless $self;
+
+    # initialize value
+    $self->{fit_size_acc} = 0;
 
     return $self;
   }
@@ -238,8 +242,9 @@
 
     $self->size($self->{size} + $self->{fit_size_acc}) if $self->{fit_size_acc};
 
-    # using '+-' to work around bigint strangeness in perl 5.16 (bnc #766339)
-    my $p_size = $self->{size} - $self->partition_ofs + -$self->{extra_size};
+    $self->{extra_size} = 0 if !defined $self->{extra_size};
+
+    my $p_size = $self->{size} - $self->partition_ofs - $self->{extra_size};
     return undef if $p_size < 0;
 
     my $c = $self->{c};
@@ -354,6 +359,10 @@
           my $x = " -L '$self->{label}'" if $self->{label} ne "";
           system "mkfs.xfs -q$x $f";
         }
+        elsif($self->{fs} eq 'ntfs') {
+          my $x = " -L '$self->{label}'" if $self->{label} ne "";
+          system "mkfs.ntfs -f -F$x -s 512 -H $self->{h} -S $self->{s} -p ${\($self->partition_ofs)} $f";
+        }
         else {
           print STDERR "warning: $self->{fs}: unsupported file system\n";
         }
@@ -443,7 +452,7 @@ $fuk_dir = tmp_dir;
 
 open F, ">$fuk_dir/config.sys";
 print F "switches=/f\n";
-print F "device=c:\himemx.exe\n";
+print F "device=c:\\himemx.exe\n";
 close F;
 open F, ">$fuk_dir/autoexec.bat";
 print F "$opt_run\n" if $opt_run;
@@ -499,8 +508,12 @@ if($opt_iso) {
   if(!-f "/usr/share/syslinux/isolinux.bin") {
     die "/usr/share/syslinux/isolinux.bin: no such file\nPlease install package 'syslinux'.\n";
   }
-  if(!-x "/usr/bin/genisoimage") {
-    die "genisoimage not found\nPlease install package 'genisoimage'.\n";
+
+  $mkisofs = "/usr/bin/mkisofs";
+  $mkisofs = "/usr/bin/genisoimage" if ! -x $mkisofs;
+
+  if(!-x $mkisofs) {
+    die "mkisofs: command not found\nPlease install package 'mkisofs'.\n";
   }
 
   mkdir "$fuk_dir/cd", 0755;
@@ -523,7 +536,7 @@ timeout		0
 
   system "cp /usr/share/syslinux/memdisk $fuk_dir/cd";
   system "cp /usr/share/syslinux/isolinux.bin $fuk_dir/cd";
-  system "genisoimage" . ($opt_verbose ? "" : " --quiet") .
+  system $mkisofs . ($opt_verbose ? "" : " --quiet") .
     " -o $opt_iso -f -no-emul-boot -boot-load-size 4 -boot-info-table -b isolinux.bin -hide boot.catalog $fuk_dir/cd";
 
   exit 0;
