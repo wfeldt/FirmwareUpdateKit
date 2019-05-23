@@ -457,6 +457,9 @@ GetOptions(
 
 usage 1 if !@ARGV;
 
+# force PATH to sensible system default
+$ENV{PATH} = "/usr/bin:/bin:/usr/sbin:/sbin";
+
 my @files;
 @files = @ARGV;
 
