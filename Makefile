@@ -22,7 +22,7 @@ changelog: $(GITDEPS)
 install:
 	install -d -m 755 $(DESTDIR)/usr/share/FirmwareUpdateKit
 	install -m 644 dosfiles/* $(DESTDIR)/usr/share/FirmwareUpdateKit
-	install -m 755 -D fuk $(DESTDIR)$(BINDIR)
+	install -m 755 -D fuk $(DESTDIR)$(BINDIR)/fuk
 	perl -pi -e 's/<VERSION>/$(VERSION)/' $(DESTDIR)$(BINDIR)/fuk
 
 clean:
